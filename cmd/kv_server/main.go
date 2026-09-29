@@ -59,7 +59,7 @@ func (server *KVServer) Put(key string, value []byte) error {
 	for i := range server.StorageWorkers {
 		worker := &server.StorageWorkers[i]
 		if worker.RPCClient != nil {
-			err := worker.RPCClient.Call("KVServer.Put", put_request, &put_response)
+			err := worker.RPCClient.Call("KVStore.Put", put_request, &put_response)
 			if err != nil {
 				log.Println("put error:", err)
 			}
@@ -85,7 +85,7 @@ func (server *KVServer) Get(key string) ([]byte, error) {
 		worker := &server.StorageWorkers[i]
 		if key >= worker.MinKey && key <= worker.MaxKey {
 			log.Println("Calling get for key:", key)
-			err := worker.RPCClient.Call("KVServer.Get", get_request, get_response)
+			err := worker.RPCClient.Call("KVStore.Get", get_request, get_response)
 			if err != nil {
 				return []byte{}, err
 			}
