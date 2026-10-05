@@ -1,6 +1,9 @@
 package kv
 
-import "log"
+import (
+	"log"
+	"sync"
+)
 
 type PutArgs struct {
 	Key   string
@@ -18,6 +21,7 @@ type GetReply struct {
 
 type KVStore struct {
 	storage map[string][]byte
+	mu      sync.Mutex
 }
 
 func NewKVStore() *KVStore {
@@ -31,6 +35,9 @@ func (server *KVStore) Put(args *PutArgs, reply *PutReply) error {
 		return nil
 	}
 
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
 	server.storage[args.Key] = args.Value
 	*reply = true
 
@@ -39,6 +46,10 @@ func (server *KVStore) Put(args *PutArgs, reply *PutReply) error {
 
 func (server *KVStore) Get(args *GetArgs, reply *GetReply) error {
 	log.Println("Received get request:", args)
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
 	reply.Value = server.storage[args.Key]
 	return nil
 }
