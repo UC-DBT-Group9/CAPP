@@ -5,9 +5,16 @@ import (
 	"sync"
 )
 
+type SelectArgs struct {
+	Predicate *Expr
+}
+type SelectReply struct {
+	Values []Value
+}
+
 type PutArgs struct {
 	Key   string
-	Value []byte
+	Value Value
 }
 type PutReply bool
 
@@ -16,40 +23,61 @@ type GetArgs struct {
 }
 
 type GetReply struct {
-	Value []byte
+	Value Value
 }
 
 type KVStore struct {
-	storage map[string][]byte
+	storage map[string]Value
 	mu      sync.Mutex
 }
 
 func NewKVStore() *KVStore {
-	return &KVStore{storage: make(map[string][]byte)}
+	return &KVStore{storage: make(map[string]Value)}
 }
 
-func (server *KVStore) Put(args *PutArgs, reply *PutReply) error {
+func (store *KVStore) Put(args *PutArgs, reply *PutReply) error {
 	log.Println("Received put request:", args)
 	if args.Key == "" {
 		*reply = false
 		return nil
 	}
 
-	server.mu.Lock()
-	defer server.mu.Unlock()
+	store.mu.Lock()
+	defer store.mu.Unlock()
 
-	server.storage[args.Key] = args.Value
+	store.storage[args.Key] = args.Value
 	*reply = true
 
 	return nil
 }
 
-func (server *KVStore) Get(args *GetArgs, reply *GetReply) error {
+func (store *KVStore) Get(args *GetArgs, reply *GetReply) error {
 	log.Println("Received get request:", args)
 
-	server.mu.Lock()
-	defer server.mu.Unlock()
+	store.mu.Lock()
+	defer store.mu.Unlock()
 
-	reply.Value = server.storage[args.Key]
+	reply.Value = store.storage[args.Key]
+	return nil
+}
+
+func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
+	var values []Value
+	if args.Predicate == nil {
+		for _, v := range store.storage {
+			values = append(values, v)
+		}
+	} else {
+		for _, v := range store.storage {
+			res, err := args.Predicate.Eval(v)
+			if err != nil {
+				log.Println(err)
+			}
+			if res.Kind == KindBool && res.Bool {
+				values = append(values, v)
+			}
+		}
+	}
+	reply.Values = values
 	return nil
 }

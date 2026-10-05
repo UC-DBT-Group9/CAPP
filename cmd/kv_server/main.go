@@ -51,7 +51,7 @@ func (server *KVServer) connectToStorageWorkers(storageWorkerConfigs []KVStorage
 }
 
 // Store a key-value pair in the storage cluster.
-func (server *KVServer) Put(key string, value []byte) error {
+func (server *KVServer) Put(key string, value kv.Value) error {
 	put_request := &kv.PutArgs{Key: key, Value: value}
 	var put_response kv.PutReply
 
@@ -77,7 +77,7 @@ func (server *KVServer) Put(key string, value []byte) error {
 }
 
 // Retreive the  value associated with `key` in the cluster.
-func (server *KVServer) Get(key string) ([]byte, error) {
+func (server *KVServer) Get(key string) (kv.Value, error) {
 	get_request := &kv.GetArgs{Key: key}
 	var get_response = &kv.GetReply{}
 
@@ -87,13 +87,33 @@ func (server *KVServer) Get(key string) ([]byte, error) {
 			log.Println("Calling get for key:", key)
 			err := worker.RPCClient.Call("KVStore.Get", get_request, get_response)
 			if err != nil {
-				return []byte{}, err
+				return kv.NullValue(), err
 			}
-			log.Println("Got key:", string(get_response.Value))
+			log.Println("Got key:", get_response.Value)
 			return get_response.Value, nil
 		}
 	}
-	return []byte{}, errors.New("not found.")
+	return kv.NullValue(), errors.New("not found.")
+}
+
+func (server *KVServer) Select(predicate *kv.Expr) ([]kv.Value, error) {
+	req := &kv.SelectArgs{Predicate: predicate}
+	var resp = &kv.SelectReply{}
+	var values []kv.Value
+
+	for i := range server.StorageWorkers {
+		worker := &server.StorageWorkers[i]
+		log.Println("Calling select with pred:", predicate)
+		err := worker.RPCClient.Call("KVStore.Select", req, resp)
+		if err != nil {
+			return nil, err
+		}
+		if resp.Values != nil {
+			return resp.Values, nil
+		}
+	}
+
+	return values, nil
 }
 
 func main() {
@@ -105,10 +125,19 @@ func main() {
 		log.Fatal("connect error:", err)
 	}
 
-	err = server.Put("Hello", []byte("World"))
+	err = server.Put("Hello", kv.StringValue("World"))
 	if err != nil {
 		log.Fatal("put error: ", err)
 	}
+	err = server.Put("num1", kv.IntValue(1))
+	if err != nil {
+		log.Fatal("put error: ", err)
+	}
+	err = server.Put("num2", kv.IntValue(2))
+	if err != nil {
+		log.Fatal("put error: ", err)
+	}
+
 	val, err := server.Get("Hello")
 	if err != nil {
 		log.Fatal("get error: ", err)
@@ -117,6 +146,14 @@ func main() {
 	if err != nil {
 		log.Println("get error:", err)
 	}
-	log.Println("Got:", string(val))
+	log.Println("Got:", val)
 
+	pred := kv.Binary(kv.OpLT, kv.Root(), kv.Literal(kv.IntValue(2)))
+	vals, err := server.Select(&pred)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, v := range vals {
+		log.Println(v.Int)
+	}
 }
