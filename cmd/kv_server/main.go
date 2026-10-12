@@ -50,10 +50,11 @@ func (server *KVServer) connectToStorageWorkers(storageWorkerConfigs []KVStorage
 	return nil
 }
 
-// Store a key-value pair in the storage cluster.
-func (server *KVServer) Put(key string, value kv.Value) error {
-	put_request := &kv.PutArgs{Key: key, Value: value}
+// Store a CSV object in the storage cluster.
+func (server *KVServer) Put(key string, obj kv.CSVObj) error {
+	put_request := &kv.PutArgs{Key: key, CSVObj: obj}
 	var put_response kv.PutReply
+	stored := false
 
 	log.Println("Calling Put...")
 	for i := range server.StorageWorkers {
@@ -61,8 +62,12 @@ func (server *KVServer) Put(key string, value kv.Value) error {
 		if worker.RPCClient != nil {
 			err := worker.RPCClient.Call("KVStore.Put", put_request, &put_response)
 			if err != nil {
-				log.Println("put error:", err)
+				return err
 			}
+			if !put_response {
+				return errors.New("put rejected")
+			}
+			stored = true
 			log.Println("Put success:", put_response)
 
 			if worker.MinKey == "" || worker.MinKey > key {
@@ -73,47 +78,49 @@ func (server *KVServer) Put(key string, value kv.Value) error {
 			}
 		}
 	}
+	if !stored {
+		return errors.New("no connected storage workers")
+	}
 	return nil
 }
 
-// Retreive the  value associated with `key` in the cluster.
-func (server *KVServer) Get(key string) (kv.Value, error) {
+// Retrieve the CSV object associated with key in the cluster.
+func (server *KVServer) Get(key string) (kv.CSVObj, error) {
 	get_request := &kv.GetArgs{Key: key}
 	var get_response = &kv.GetReply{}
 
 	for i := range server.StorageWorkers {
 		worker := &server.StorageWorkers[i]
-		if key >= worker.MinKey && key <= worker.MaxKey {
+		if worker.RPCClient != nil && key >= worker.MinKey && key <= worker.MaxKey {
 			log.Println("Calling get for key:", key)
 			err := worker.RPCClient.Call("KVStore.Get", get_request, get_response)
 			if err != nil {
-				return kv.NullValue(), err
+				return kv.CSVObj{}, err
 			}
-			log.Println("Got key:", get_response.Value)
-			return get_response.Value, nil
+			return get_response.CSVObj, nil
 		}
 	}
-	return kv.NullValue(), errors.New("not found.")
+	return kv.CSVObj{}, errors.New("not found")
 }
 
-func (server *KVServer) Select(predicate *kv.Expr) ([]kv.Value, error) {
-	req := &kv.SelectArgs{Predicate: predicate}
+func (server *KVServer) Select(key string, predicate *kv.Expr, project []string) (*kv.SelectReply, error) {
+	req := &kv.SelectArgs{Key: key, Predicate: predicate, Project: project}
 	var resp = &kv.SelectReply{}
-	var values []kv.Value
 
 	for i := range server.StorageWorkers {
 		worker := &server.StorageWorkers[i]
+		if worker.RPCClient == nil || key < worker.MinKey || key > worker.MaxKey {
+			continue
+		}
 		log.Println("Calling select with pred:", predicate)
 		err := worker.RPCClient.Call("KVStore.Select", req, resp)
 		if err != nil {
 			return nil, err
 		}
-		if resp.Values != nil {
-			return resp.Values, nil
-		}
+		return resp, nil
 	}
 
-	return values, nil
+	return nil, errors.New("not found")
 }
 
 func main() {
@@ -125,35 +132,32 @@ func main() {
 		log.Fatal("connect error:", err)
 	}
 
-	err = server.Put("Hello", kv.StringValue("World"))
-	if err != nil {
-		log.Fatal("put error: ", err)
+	obj := kv.CSVObj{
+		Data: []byte("id,name,age\n1,Mason,30\n2,Shiv,25\n"),
+		Schema: kv.Schema{Name: "people", Attributes: []kv.Attribute{
+			{Name: "id", DataType: kv.DataTypeInt, Required: true},
+			{Name: "name", DataType: kv.DataTypeString, Required: true},
+			{Name: "age", DataType: kv.DataTypeInt, Required: true},
+		}},
+		Opts: kv.CSVOpts{HasHeader: true},
 	}
-	err = server.Put("num1", kv.IntValue(1))
-	if err != nil {
-		log.Fatal("put error: ", err)
-	}
-	err = server.Put("num2", kv.IntValue(2))
+	err = server.Put("people.csv", obj)
 	if err != nil {
 		log.Fatal("put error: ", err)
 	}
 
-	val, err := server.Get("Hello")
+	stored, err := server.Get("people.csv")
 	if err != nil {
 		log.Fatal("get error: ", err)
 	}
-	val, err = server.Get("hello")
-	if err != nil {
-		log.Println("get error:", err)
-	}
-	log.Println("Got:", val)
+	log.Println("Got CSV:", string(stored.Data))
 
-	pred := kv.Binary(kv.OpLT, kv.Root(), kv.Literal(kv.IntValue(2)))
-	vals, err := server.Select(&pred)
+	pred := kv.Binary(kv.OpGT, kv.Field("age"), kv.Literal(kv.IntValue(25)))
+	result, err := server.Select("people.csv", &pred, []string{"name"})
 	if err != nil {
 		log.Fatal(err)
 	}
-	for _, v := range vals {
-		log.Println(v.Int)
+	for _, tuple := range result.Tuples {
+		log.Println(tuple.Values[0].String)
 	}
 }

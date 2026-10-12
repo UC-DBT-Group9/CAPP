@@ -24,7 +24,7 @@ func TestOr(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Eval() error = %v", err)
 			}
-			if got.Kind != KindBool || got.Bool != tt.want {
+			if got.DataType != DataTypeBool || got.Bool != tt.want {
 				t.Errorf("Eval(%+v OR %+v) = %+v, want bool %t", tt.left, tt.right, got, tt.want)
 			}
 		})
@@ -49,7 +49,7 @@ func TestLT(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Eval() error = %v", err)
 			}
-			if got.Kind != KindBool || got.Bool != tt.want {
+			if got.DataType != DataTypeBool || got.Bool != tt.want {
 				t.Errorf("Eval(%d < %d) = %+v, want bool %t", tt.left, tt.right, got, tt.want)
 			}
 		})
@@ -75,7 +75,7 @@ func TestGT(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Eval() error = %v", err)
 			}
-			if got.Kind != KindBool || got.Bool != tt.want {
+			if got.DataType != DataTypeBool || got.Bool != tt.want {
 				t.Errorf("Eval(%d > %d) = %+v, want bool %t", tt.left, tt.right, got, tt.want)
 			}
 		})
@@ -102,7 +102,7 @@ func TestAnd(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Eval() error = %v", err)
 			}
-			if got.Kind != KindBool || got.Bool != tt.want {
+			if got.DataType != DataTypeBool || got.Bool != tt.want {
 				t.Errorf("Eval(%+v AND %+v) = %+v, want bool %t", tt.left, tt.right, got, tt.want)
 			}
 		})
@@ -118,7 +118,7 @@ func TestAndShortCircuit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Eval() error = %v; expected the right operand to be skipped", err)
 	}
-	if got.Kind != KindBool || got.Bool {
+	if got.DataType != DataTypeBool || got.Bool {
 		t.Errorf("Eval() = %+v, want bool false", got)
 	}
 }

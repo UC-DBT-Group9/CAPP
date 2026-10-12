@@ -42,7 +42,7 @@ func (e Expr) Eval(record Value) (Value, error) {
 	case OpField:
 		v := record
 		for _, name := range e.Path {
-			if v.Kind != KindObject {
+			if v.DataType != DataTypeObject {
 				return NullValue(), nil
 			}
 			var exists bool
@@ -65,8 +65,8 @@ func (e Expr) Eval(record Value) (Value, error) {
 		return Value{}, err
 	}
 	if e.Op == OpAnd || e.Op == OpOr {
-		if left.Kind != KindBool {
-			return Value{}, fmt.Errorf("logical op must be bool, got %s", left.Kind)
+		if left.DataType != DataTypeBool {
+			return Value{}, fmt.Errorf("logical op must be bool, got %s", left.DataType)
 		}
 		if (e.Op == OpAnd && !left.Bool) || (e.Op == OpOr && left.Bool) {
 			return left, nil
@@ -76,8 +76,8 @@ func (e Expr) Eval(record Value) (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
-		if right.Kind != KindBool {
-			return Value{}, fmt.Errorf("logical op must be bool, got %s", right.Kind)
+		if right.DataType != DataTypeBool {
+			return Value{}, fmt.Errorf("logical op must be bool, got %s", right.DataType)
 		}
 		return right, nil
 	}
@@ -90,7 +90,7 @@ func (e Expr) Eval(record Value) (Value, error) {
 	if e.Op == OpEq {
 		return BoolValue(areEqual(left, right)), nil
 	}
-	if left.Kind == KindNull || right.Kind == KindNull {
+	if left.DataType == DataTypeNull || right.DataType == DataTypeNull {
 		return BoolValue(false), nil
 	}
 
@@ -101,51 +101,51 @@ func (e Expr) Eval(record Value) (Value, error) {
 	return BoolValue((e.Op == OpGT && cmp > 0) || (e.Op == OpLT && cmp < 0)), nil
 }
 
-func isNumeric(v Value) bool { return v.Kind == KindInt || v.Kind == KindFloat }
+func isNumeric(v Value) bool { return v.DataType == DataTypeInt || v.DataType == DataTypeFloat }
 
 func toFloat(v Value) float64 {
-	if v.Kind == KindInt {
+	if v.DataType == DataTypeInt {
 		return float64(v.Int)
 	}
 	return v.Float
 }
 
 func CompareValues(a, b Value) (int, error) {
-	if a.Kind == KindInt && b.Kind == KindInt {
+	if a.DataType == DataTypeInt && b.DataType == DataTypeInt {
 		return cmp.Compare(a.Int, b.Int), nil
 	}
 	if isNumeric(a) && isNumeric(b) {
 		return cmp.Compare(toFloat(a), toFloat(b)), nil
 	}
-	if a.Kind == KindString && b.Kind == KindString {
+	if a.DataType == DataTypeString && b.DataType == DataTypeString {
 		return strings.Compare(a.String, b.String), nil
 	}
-	if a.Kind == KindBytes && b.Kind == KindBytes {
+	if a.DataType == DataTypeBytes && b.DataType == DataTypeBytes {
 		return bytes.Compare(a.Bytes, b.Bytes), nil
 	}
-	return 0, fmt.Errorf("cannot order %s and %s", a.Kind, b.Kind)
+	return 0, fmt.Errorf("cannot order %s and %s", a.DataType, b.DataType)
 }
 
 func areEqual(a, b Value) bool {
-	if a.Kind == KindInt && b.Kind == KindInt {
+	if a.DataType == DataTypeInt && b.DataType == DataTypeInt {
 		return a.Int == b.Int
 	}
 	if isNumeric(a) && isNumeric(b) {
 		return toFloat(a) == toFloat(b)
 	}
-	if a.Kind != b.Kind {
+	if a.DataType != b.DataType {
 		return false
 	}
-	switch a.Kind {
-	case KindNull:
+	switch a.DataType {
+	case DataTypeNull:
 		return true
-	case KindBool:
+	case DataTypeBool:
 		return a.Bool == b.Bool
-	case KindString:
+	case DataTypeString:
 		return a.String == b.String
-	case KindBytes:
+	case DataTypeBytes:
 		return bytes.Equal(a.Bytes, b.Bytes)
-	case KindArray:
+	case DataTypeArray:
 		if len(a.Array) != len(b.Array) {
 			return false
 		}
@@ -155,7 +155,7 @@ func areEqual(a, b Value) bool {
 			}
 		}
 		return true
-	case KindObject:
+	case DataTypeObject:
 		if len(a.Object) != len(b.Object) {
 			return false
 		}
