@@ -2,6 +2,7 @@ package kv
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"sync"
 )
@@ -106,12 +107,17 @@ func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
 		}
 	}
 
-	tuples, err := csvObj.Parse()
-	if err != nil {
-		return err
-	}
+	iter := csvObj.Iterator()
 
-	for _, tuple := range tuples {
+	for {
+		tuple, err := iter.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
 		if args.Predicate != nil {
 			fields := make(map[string]Value, len(tuple.Values))
 			for i, attr := range csvObj.Schema.Attributes {
