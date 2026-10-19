@@ -119,11 +119,7 @@ func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
 		}
 
 		if args.Predicate != nil {
-			fields := make(map[string]Value, len(tuple.Values))
-			for i, attr := range csvObj.Schema.Attributes {
-				fields[attr.Name] = tuple.Values[i]
-			}
-			res, err := args.Predicate.Eval(ObjectValue(fields))
+			res, err := args.Predicate.Eval(*tuple)
 			if err != nil {
 				return err
 			}
