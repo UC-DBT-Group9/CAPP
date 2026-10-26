@@ -18,29 +18,39 @@ const (
 	OpLiteral
 	OpField
 	OpRoot
+	OpAttrNum
 )
 
 type Expr struct {
 	Op    Op
 	Value Value
+	Index uint
 	Path  []string
 	Left  *Expr
 	Right *Expr
+}
+type NamedExpr struct {
+	Name string
+	Expr *Expr
 }
 
 func Literal(v Value) Expr                { return Expr{Op: OpLiteral, Value: v} }
 func Field(path ...string) Expr           { return Expr{Op: OpField, Path: path} }
 func Root() Expr                          { return Expr{Op: OpRoot} }
 func Binary(op Op, left, right Expr) Expr { return Expr{Op: op, Left: &left, Right: &right} }
+func AttrNum(index uint) Expr             { return Expr{Op: OpAttrNum, Index: index} }
 
-func (e Expr) Eval(record Value) (Value, error) {
+func (e Expr) Eval(tuple Tuple) (Value, error) {
 	switch e.Op {
 	case OpLiteral:
 		return e.Value, nil
 	case OpRoot:
-		return record, nil
+		return ArrayValue(tuple.Values), nil
 	case OpField:
-		v := record
+		if e.Index >= uint(len(tuple.Values)) {
+			return Value{}, fmt.Errorf("attribute index %d out of range for tuple with %d values", e.Index, len(tuple.Values))
+		}
+		v := tuple.Values[e.Index]
 		for _, name := range e.Path {
 			if v.DataType != DataTypeObject {
 				return NullValue(), nil
@@ -56,11 +66,16 @@ func (e Expr) Eval(record Value) (Value, error) {
 		if e.Left == nil || e.Right == nil {
 			return Value{}, fmt.Errorf("op requires two operands")
 		}
+	case OpAttrNum:
+		if e.Index >= uint(len(tuple.Values)) {
+			return Value{}, fmt.Errorf("attribute index %d out of range for tuple with %d values", e.Index, len(tuple.Values))
+		}
+		return tuple.Values[e.Index], nil
 	default:
 		return Value{}, fmt.Errorf("unknown op %d", e.Op)
 	}
 
-	left, err := e.Left.Eval(record)
+	left, err := e.Left.Eval(tuple)
 	if err != nil {
 		return Value{}, err
 	}
@@ -72,7 +87,7 @@ func (e Expr) Eval(record Value) (Value, error) {
 			return left, nil
 		}
 
-		right, err := e.Right.Eval(record)
+		right, err := e.Right.Eval(tuple)
 		if err != nil {
 			return Value{}, err
 		}
@@ -82,7 +97,7 @@ func (e Expr) Eval(record Value) (Value, error) {
 		return right, nil
 	}
 
-	right, err := e.Right.Eval(record)
+	right, err := e.Right.Eval(tuple)
 	if err != nil {
 		return Value{}, err
 	}

@@ -20,7 +20,7 @@ func TestOr(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			predicate := Binary(OpOr, Literal(BoolValue(tt.left)), Literal(BoolValue(tt.right)))
-			got, err := predicate.Eval(NullValue())
+			got, err := predicate.Eval(Tuple{[]Value{NullValue()}})
 			if err != nil {
 				t.Fatalf("Eval() error = %v", err)
 			}
@@ -45,7 +45,7 @@ func TestLT(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			predicate := Binary(OpLT, Literal(IntValue(tt.left)), Literal(IntValue(tt.right)))
-			got, err := predicate.Eval(NullValue())
+			got, err := predicate.Eval(Tuple{})
 			if err != nil {
 				t.Fatalf("Eval() error = %v", err)
 			}
@@ -71,7 +71,7 @@ func TestGT(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			predicate := Binary(OpGT, Literal(IntValue(tt.left)), Literal(IntValue(tt.right)))
-			got, err := predicate.Eval(NullValue())
+			got, err := predicate.Eval(Tuple{})
 			if err != nil {
 				t.Fatalf("Eval() error = %v", err)
 			}
@@ -98,7 +98,7 @@ func TestAnd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			predicate := Binary(OpAnd, Literal(BoolValue(tt.left)), Literal(BoolValue(tt.right)))
-			got, err := predicate.Eval(NullValue())
+			got, err := predicate.Eval(Tuple{[]Value{NullValue()}})
 			if err != nil {
 				t.Fatalf("Eval() error = %v", err)
 			}
@@ -114,7 +114,7 @@ func TestAndShortCircuit(t *testing.T) {
 		Literal(BoolValue(false)),
 		Binary(OpGT, Literal(BoolValue(true)), Literal(BoolValue(false))),
 	)
-	got, err := predicate.Eval(NullValue())
+	got, err := predicate.Eval(Tuple{})
 	if err != nil {
 		t.Fatalf("Eval() error = %v; expected the right operand to be skipped", err)
 	}
