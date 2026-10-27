@@ -82,30 +82,15 @@ func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
 		return fmt.Errorf("key %s not found", args.Key)
 	}
 
-	result := SelectReply{Schema: Schema{Name: csvObj.Schema.Name}}
-	var attrPositions []int
-
-	if len(args.Project) == 0 {
-		for i, attr := range csvObj.Schema.Attributes {
-			attrPositions = append(attrPositions, i)
-			result.Schema.Attributes = append(result.Schema.Attributes, attr)
-		}
-	} else {
-		for _, name := range args.Project {
-			position := -1
-			for i, attr := range csvObj.Schema.Attributes {
-				if attr.Name == name {
-					position = i
-					break
-				}
-			}
-			if position == -1 {
-				return fmt.Errorf("unknown projection column %q", name)
-			}
-			attrPositions = append(attrPositions, position)
-			result.Schema.Attributes = append(result.Schema.Attributes, csvObj.Schema.Attributes[position])
-		}
+	predicate, err := ResolvePredicate(csvObj.Schema, args.Predicate)
+	if err != nil {
+		return err
 	}
+	positions, schema, err := ResolveProjection(csvObj.Schema, args.Project)
+	if err != nil {
+		return err
+	}
+	result := SelectReply{Schema: schema}
 
 	iter := csvObj.Iterator()
 
@@ -118,23 +103,14 @@ func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
 			return err
 		}
 
-		if args.Predicate != nil {
-			res, err := args.Predicate.Eval(*tuple)
-			if err != nil {
-				return err
-			}
-			if res.DataType != DataTypeBool {
-				return fmt.Errorf("predicate must return bool, got %s", res.DataType)
-			}
-			if !res.Bool {
-				continue
-			}
+		match, err := MatchesPredicate(*tuple, predicate)
+		if err != nil {
+			return err
 		}
-		projected := Tuple{Values: make([]Value, len(attrPositions))}
-		for i, position := range attrPositions {
-			projected.Values[i] = tuple.Values[position]
+		if !match {
+			continue
 		}
-		result.Tuples = append(result.Tuples, projected)
+		result.Tuples = append(result.Tuples, ProjectTuple(*tuple, positions))
 	}
 	*reply = result
 	return nil

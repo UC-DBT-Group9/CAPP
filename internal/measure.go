@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"fmt"
 	"io"
 	"time"
 )
@@ -73,7 +72,12 @@ func estimateValueBytes(v *Value) int64 {
 // would); the pull path reports the full object as bytes returned (as copying
 // raw data would), then filters locally.
 func MeasureSelect(obj *CSVObj, pred *Expr, project []string, strategy Strategy) ([]Tuple, *Measurement, error) {
-	positions, _, err := resolveProjection(obj, project)
+	positions, _, err := ResolveProjection(obj.Schema, project)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pred, err = ResolvePredicate(obj.Schema, pred)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -93,12 +97,12 @@ func MeasureSelect(obj *CSVObj, pred *Expr, project []string, strategy Strategy)
 		}
 		m.RowsScanned++
 
-		match, err := matches(obj, tuple, pred)
+		match, err := MatchesPredicate(*tuple, pred)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		projected := projectTuple(tuple, positions)
+		projected := ProjectTuple(*tuple, positions)
 
 		switch strategy {
 		case StrategyPushdown:
@@ -121,59 +125,4 @@ func MeasureSelect(obj *CSVObj, pred *Expr, project []string, strategy Strategy)
 
 	m.Elapsed = time.Since(start)
 	return out, m, nil
-}
-
-// --- small helpers, kept local so this file is self-contained ---
-
-func resolveProjection(obj *CSVObj, project []string) ([]int, Schema, error) {
-	out := Schema{Name: obj.Schema.Name}
-	var positions []int
-	if len(project) == 0 {
-		for i, attr := range obj.Schema.Attributes {
-			positions = append(positions, i)
-			out.Attributes = append(out.Attributes, attr)
-		}
-		return positions, out, nil
-	}
-	for _, name := range project {
-		pos := -1
-		for i, attr := range obj.Schema.Attributes {
-			if attr.Name == name {
-				pos = i
-				break
-			}
-		}
-		if pos == -1 {
-			return nil, out, fmt.Errorf("unknown projection column %q", name)
-		}
-		positions = append(positions, pos)
-		out.Attributes = append(out.Attributes, obj.Schema.Attributes[pos])
-	}
-	return positions, out, nil
-}
-
-func projectTuple(t *Tuple, positions []int) Tuple {
-	p := Tuple{Values: make([]Value, len(positions))}
-	for i, pos := range positions {
-		p.Values[i] = t.Values[pos]
-	}
-	return p
-}
-
-func matches(obj *CSVObj, t *Tuple, pred *Expr) (bool, error) {
-	if pred == nil {
-		return true, nil
-	}
-	fields := make(map[string]Value, len(t.Values))
-	for i, attr := range obj.Schema.Attributes {
-		fields[attr.Name] = t.Values[i]
-	}
-	res, err := pred.Eval(ObjectValue(fields))
-	if err != nil {
-		return false, err
-	}
-	if res.DataType != DataTypeBool {
-		return false, fmt.Errorf("predicate must return bool, got %s", res.DataType)
-	}
-	return res.Bool, nil
 }

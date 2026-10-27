@@ -25,7 +25,7 @@ type Expr struct {
 	Op    Op
 	Value Value
 	Index uint
-	Path  []string
+	Name  string
 	Left  *Expr
 	Right *Expr
 }
@@ -34,11 +34,39 @@ type NamedExpr struct {
 	Expr *Expr
 }
 
-func Literal(v Value) Expr                { return Expr{Op: OpLiteral, Value: v} }
-func Field(path ...string) Expr           { return Expr{Op: OpField, Path: path} }
+func Literal(v Value) Expr { return Expr{Op: OpLiteral, Value: v} }
+
+func Field(name string) Expr              { return Expr{Op: OpField, Name: name} }
 func Root() Expr                          { return Expr{Op: OpRoot} }
 func Binary(op Op, left, right Expr) Expr { return Expr{Op: op, Left: &left, Right: &right} }
 func AttrNum(index uint) Expr             { return Expr{Op: OpAttrNum, Index: index} }
+
+func (e Expr) Resolve(schema Schema) (Expr, error) {
+	if e.Op == OpField {
+		if i, found := schema.AttributeIndex(e.Name); found {
+			return AttrNum(uint(i)), nil
+		}
+		return Expr{}, fmt.Errorf("unknown field %q", e.Name)
+	}
+	if e.Op == OpAttrNum && e.Index >= uint(len(schema.Attributes)) {
+		return Expr{}, fmt.Errorf("attribute index %d out of range for schema with %d attributes", e.Index, len(schema.Attributes))
+	}
+	if e.Left != nil {
+		left, err := e.Left.Resolve(schema)
+		if err != nil {
+			return Expr{}, err
+		}
+		e.Left = &left
+	}
+	if e.Right != nil {
+		right, err := e.Right.Resolve(schema)
+		if err != nil {
+			return Expr{}, err
+		}
+		e.Right = &right
+	}
+	return e, nil
+}
 
 func (e Expr) Eval(tuple Tuple) (Value, error) {
 	switch e.Op {
@@ -47,21 +75,7 @@ func (e Expr) Eval(tuple Tuple) (Value, error) {
 	case OpRoot:
 		return ArrayValue(tuple.Values), nil
 	case OpField:
-		if e.Index >= uint(len(tuple.Values)) {
-			return Value{}, fmt.Errorf("attribute index %d out of range for tuple with %d values", e.Index, len(tuple.Values))
-		}
-		v := tuple.Values[e.Index]
-		for _, name := range e.Path {
-			if v.DataType != DataTypeObject {
-				return NullValue(), nil
-			}
-			var exists bool
-			v, exists = v.Object[name]
-			if !exists {
-				return NullValue(), nil
-			}
-		}
-		return v, nil
+		return Value{}, fmt.Errorf("unresolved field %q: resolve expression against a schema before evaluation", e.Name)
 	case OpEq, OpGT, OpLT, OpAnd, OpOr:
 		if e.Left == nil || e.Right == nil {
 			return Value{}, fmt.Errorf("op requires two operands")

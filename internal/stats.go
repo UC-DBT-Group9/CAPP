@@ -229,7 +229,7 @@ func (ts *TableStats) rangeSelectivity(e *Expr) float64 {
 		return defaultSelectivity // only numeric ranges are interpolated
 	}
 
-	fieldOnLeft := e.Left != nil && e.Left.Op == OpField
+	fieldOnLeft := ts.column(e.Left) != nil
 	op := e.Op
 	if !fieldOnLeft {
 		// literal OP field  ==  field (flipped OP) literal
@@ -267,22 +267,30 @@ func (ts *TableStats) fieldAndLiteral(e *Expr) (*ColumnStats, *Value) {
 		return nil, nil
 	}
 	switch {
-	case e.Left.Op == OpField && e.Right.Op == OpLiteral:
-		return ts.column(e.Left.Path), &e.Right.Value
-	case e.Left.Op == OpLiteral && e.Right.Op == OpField:
-		return ts.column(e.Right.Path), &e.Left.Value
+	case e.Right.Op == OpLiteral:
+		return ts.column(e.Left), &e.Right.Value
+	case e.Left.Op == OpLiteral:
+		return ts.column(e.Right), &e.Left.Value
 	default:
 		return nil, nil
 	}
 }
 
-// column resolves a field path to its stats. Only top-level columns are
-// tracked, so a multi-segment path (into a nested object) has no stats.
-func (ts *TableStats) column(path []string) *ColumnStats {
-	if len(path) != 1 {
+// column accepts either a named field or a resolved tuple attribute.
+func (ts *TableStats) column(e *Expr) *ColumnStats {
+	if e == nil {
 		return nil
 	}
-	return ts.Columns[path[0]]
+	if e.Op == OpField {
+		return ts.Columns[e.Name]
+	}
+	if e.Op != OpAttrNum {
+		return nil
+	}
+	if e.Index >= uint(len(ts.order)) {
+		return nil
+	}
+	return ts.Columns[ts.order[e.Index]]
 }
 
 // EstimateRows returns the expected number of rows a predicate keeps.

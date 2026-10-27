@@ -19,6 +19,16 @@ type Schema struct {
 	Attributes []Attribute
 }
 
+// AttributeIndex returns the position of the first attribute matching name.
+func (schema Schema) AttributeIndex(name string) (int, bool) {
+	for i, attr := range schema.Attributes {
+		if attr.Name == name {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
 func NewAttribute(dt DataType, name string, required bool) (*Attribute, error) {
 	return &Attribute{DataType: dt, Name: name, Required: required}, nil
 }
