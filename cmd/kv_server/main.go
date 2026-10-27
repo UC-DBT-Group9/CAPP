@@ -35,7 +35,7 @@ func main() {
 		log.Fatal("put error: ", err)
 	}
 
-	pred := kv.Binary(kv.OpGT, kv.AttrNum(2), kv.Literal(kv.IntValue(24)))
+	pred := kv.Binary(kv.OpGT, kv.Field("age"), kv.Literal(kv.IntValue(24)))
 
 	start := time.Now()
 	rs := phys.NewRemoteScan(&pred, []kv.NamedExpr{}, "people.csv", server)

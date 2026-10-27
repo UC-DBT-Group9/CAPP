@@ -1,7 +1,6 @@
 package physical
 
 import (
-	"fmt"
 	"slices"
 
 	"github.com/UC-DBT-Group9/CAPP/internal"
@@ -73,26 +72,29 @@ func (ls LocalScan) NextBatch() (*kv.Schema, []kv.Tuple, error) {
 	for _, e := range ls.Project {
 		names = append(names, e.Name)
 	}
-	reply, err := ls.coord.Select(ls.Source, nil, names)
+	reply, err := ls.coord.Select(ls.Source, nil, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	predicate, err := kv.ResolvePredicate(reply.Schema, ls.Predicate)
+	if err != nil {
+		return nil, nil, err
+	}
+	positions, schema, err := kv.ResolveProjection(reply.Schema, names)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, tuple := range reply.Tuples {
-		if ls.Predicate != nil {
-			res, err := ls.Predicate.Eval(tuple)
-			if err != nil {
-				return nil, nil, err
-			}
-			if res.DataType != kv.DataTypeBool {
-				return nil, nil, fmt.Errorf("predicate must return bool, got %s", res.DataType)
-			}
-			if !res.Bool {
-				continue
-			}
+		match, err := kv.MatchesPredicate(tuple, predicate)
+		if err != nil {
+			return nil, nil, err
 		}
-		tuples = append(tuples, tuple)
+		if !match {
+			continue
+		}
+		tuples = append(tuples, kv.ProjectTuple(tuple, positions))
 	}
-	return &reply.Schema, tuples, nil
+	return &schema, tuples, nil
 }
 
 func (RemoteScan) physicalOp() {}
