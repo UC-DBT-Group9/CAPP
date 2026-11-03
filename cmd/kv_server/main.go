@@ -5,7 +5,6 @@ import (
 	"time"
 
 	kv "github.com/UC-DBT-Group9/CAPP/internal"
-	phys "github.com/UC-DBT-Group9/CAPP/internal/physical"
 )
 
 func main() {
@@ -38,8 +37,11 @@ func main() {
 	pred := kv.Binary(kv.OpGT, kv.Field("age"), kv.Literal(kv.IntValue(24)))
 
 	start := time.Now()
-	rs := phys.NewRemoteScan(&pred, []kv.NamedExpr{}, "people.csv", server)
-	_, tuples, err := rs.NextBatch()
+	rs := &kv.Filter{Predicate: pred, Input: kv.NewRemoteScan("people.csv", server)}
+	_, tuples, err := rs.Execute()
+	if err != nil {
+		log.Fatal("remote scan error: ", err)
+	}
 	end := time.Now()
 	elapsed := end.Sub(start)
 	log.Println("Remote scan:", elapsed)
@@ -48,8 +50,11 @@ func main() {
 	}
 
 	start = time.Now()
-	ls := phys.NewLocalScan(&pred, []kv.NamedExpr{}, "people1.csv", server)
-	_, tuples, err = ls.NextBatch()
+	ls := &kv.Filter{Predicate: pred, Input: kv.NewLocalScan("people1.csv", server)}
+	_, tuples, err = ls.Execute()
+	if err != nil {
+		log.Fatal("local scan error: ", err)
+	}
 	end = time.Now()
 	elapsed = end.Sub(start)
 	log.Println("Local scan:", elapsed)
@@ -58,10 +63,26 @@ func main() {
 	}
 
 	start = time.Now()
-	lim := phys.NewLimitNode(10, ls)
-	_, tuples, err = lim.NextBatch()
+	planner := kv.NewPlanner(server)
+	plan, err := planner.Plan(kv.LimitNode{
+		NumRows: 2,
+		Input: kv.ProjectNode{
+			Attributes: []string{"id", "name"},
+			Input: kv.FilterNode{
+				Predicate: pred,
+				Input:     kv.TableScanNode{Source: "people.csv"},
+			},
+		},
+	})
+	if err != nil {
+		log.Fatal("plan error: ", err)
+	}
+	_, tuples, err = plan.Execute()
+	if err != nil {
+		log.Fatal("query error: ", err)
+	}
 	end = time.Now()
 	elapsed = end.Sub(start)
-	log.Println("Limit:", elapsed)
+	log.Println("Planned query:", elapsed)
 	log.Println(len(tuples))
 }
