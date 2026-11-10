@@ -34,13 +34,15 @@ type GetReply struct {
 type KVStore struct {
 	storage map[string]CSVObj
 	mu      sync.Mutex
+	usage   *UsageTracker
 }
 
 func NewKVStore() *KVStore {
-	return &KVStore{storage: make(map[string]CSVObj)}
+	return &KVStore{storage: make(map[string]CSVObj), usage: NewUsageTracker()}
 }
 
 func (store *KVStore) Put(args *PutArgs, reply *PutReply) error {
+	store.usage.request()
 	log.Println("Received put request:", args.Key)
 	*reply = false
 	if args.Key == "" {
@@ -54,6 +56,7 @@ func (store *KVStore) Put(args *PutArgs, reply *PutReply) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
+	store.usage.storageChanged(int64(len(args.CSVObj.Data) - len(store.storage[args.Key].Data))) // store the difference between what's there vs. new
 	store.storage[args.Key] = args.CSVObj
 	*reply = true
 
@@ -61,6 +64,7 @@ func (store *KVStore) Put(args *PutArgs, reply *PutReply) error {
 }
 
 func (store *KVStore) Get(args *GetArgs, reply *GetReply) error {
+	store.usage.request()
 	log.Println("Received get request:", args)
 
 	store.mu.Lock()
@@ -70,11 +74,13 @@ func (store *KVStore) Get(args *GetArgs, reply *GetReply) error {
 	if !found {
 		return fmt.Errorf("key %s not found", args.Key)
 	}
+	store.usage.recordGetBytesReturned(int64(len(obj.Data)))
 	reply.CSVObj = obj
 	return nil
 }
 
 func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
+	store.usage.request()
 	store.mu.Lock()
 	csvObj, found := store.storage[args.Key]
 	store.mu.Unlock()
@@ -90,6 +96,7 @@ func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
 	if err != nil {
 		return err
 	}
+	store.usage.recordSelectBytesScanned(int64(len(csvObj.Data)))
 	result := SelectReply{Schema: schema}
 
 	iter := csvObj.Iterator()
@@ -112,6 +119,20 @@ func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
 		}
 		result.Tuples = append(result.Tuples, ProjectTuple(*tuple, positions))
 	}
+	var returned int64
+	for i := range result.Tuples {
+		returned += EstimateTupleBytes(&result.Tuples[i])
+	}
+	store.usage.recordSelectBytesReturned(returned)
 	*reply = result
+	return nil
+}
+
+func (store *KVStore) Usage() *UsageTracker { return store.usage }
+
+type UsageArgs struct{}
+
+func (store *KVStore) GetUsage(_ *UsageArgs, reply *Usage) error {
+	*reply = store.usage.Snapshot()
 	return nil
 }

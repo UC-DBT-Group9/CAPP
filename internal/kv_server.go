@@ -2,8 +2,10 @@ package kv
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/rpc"
+	"time"
 )
 
 // Configuration for a storage worker. Used by the KVServer.
@@ -21,12 +23,14 @@ type KVStorageWorker struct {
 
 // The storage coordinator/kv server.
 type KVServer struct {
+	computeStarted time.Time
+	now            func() time.Time  // Allows for substituting clock functions.
 	StorageWorkers []KVStorageWorker // List of all current storage workers.
 }
 
 // KVServer constructor. Takes in a list of KVStorageWorkerConfigs for connecting to a storage cluster.
 func NewKVServer(storageWorkerConfigs []KVStorageWorkerConfig) (*KVServer, error) {
-	server := &KVServer{}
+	server := &KVServer{computeStarted: time.Now(), now: time.Now}
 	server.StorageWorkers = make([]KVStorageWorker, len(storageWorkerConfigs))
 	err := server.connectToStorageWorkers(storageWorkerConfigs)
 	if err != nil {
@@ -119,4 +123,41 @@ func (server *KVServer) Select(key string, predicate *Expr, project []string) (*
 	}
 
 	return nil, errors.New("not found")
+}
+
+func (server *KVServer) Usage() CoordinatorUsage {
+	if server.computeStarted.IsZero() {
+		return CoordinatorUsage{}
+	}
+	clock := server.now
+	if clock == nil {
+		clock = time.Now
+	}
+	now := clock()
+
+	elapsed := max(now.Sub(server.computeStarted), 0)
+	return CoordinatorUsage{ComputeTime: elapsed}
+}
+
+func (server *KVServer) GetUsage() (SystemUsage, error) {
+	var total SystemUsage
+	for i := range server.StorageWorkers {
+		worker := &server.StorageWorkers[i]
+		if worker.RPCClient == nil {
+			return SystemUsage{}, fmt.Errorf("get usage from worker %d (%s): not connected", i, worker.RPCServerPort)
+		}
+		var usage Usage
+		if err := worker.RPCClient.Call("KVStore.GetUsage", &UsageArgs{}, &usage); err != nil {
+			return SystemUsage{}, fmt.Errorf("get usage from worker %d (%s): %w", i, worker.RPCServerPort, err)
+		}
+		total.StoredBytes += usage.StoredBytes
+		total.StorageByteHours += usage.StorageByteHours
+		total.Requests += usage.Requests
+		total.GetBytesReturned += usage.GetBytesReturned
+		total.SelectBytesScanned += usage.SelectBytesScanned
+		total.SelectBytesReturned += usage.SelectBytesReturned
+		total.OutboundBytes += usage.OutboundBytes
+	}
+	total.CoordinatorUsage = server.Usage()
+	return total, nil
 }
