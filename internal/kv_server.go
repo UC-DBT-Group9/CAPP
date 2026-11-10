@@ -2,6 +2,7 @@ package kv
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/rpc"
 	"time"
@@ -136,4 +137,27 @@ func (server *KVServer) Usage() CoordinatorUsage {
 
 	elapsed := max(now.Sub(server.computeStarted), 0)
 	return CoordinatorUsage{ComputeTime: elapsed}
+}
+
+func (server *KVServer) GetUsage() (SystemUsage, error) {
+	var total SystemUsage
+	for i := range server.StorageWorkers {
+		worker := &server.StorageWorkers[i]
+		if worker.RPCClient == nil {
+			return SystemUsage{}, fmt.Errorf("get usage from worker %d (%s): not connected", i, worker.RPCServerPort)
+		}
+		var usage Usage
+		if err := worker.RPCClient.Call("KVStore.GetUsage", &UsageArgs{}, &usage); err != nil {
+			return SystemUsage{}, fmt.Errorf("get usage from worker %d (%s): %w", i, worker.RPCServerPort, err)
+		}
+		total.StoredBytes += usage.StoredBytes
+		total.StorageByteHours += usage.StorageByteHours
+		total.Requests += usage.Requests
+		total.GetBytesReturned += usage.GetBytesReturned
+		total.SelectBytesScanned += usage.SelectBytesScanned
+		total.SelectBytesReturned += usage.SelectBytesReturned
+		total.OutboundBytes += usage.OutboundBytes
+	}
+	total.CoordinatorUsage = server.Usage()
+	return total, nil
 }

@@ -134,3 +134,15 @@ func (u CoordinatorUsage) Cost(r Rates) UsageCost {
 	compute := u.ComputeTime.Hours() * r.ComputeHour
 	return UsageCost{Compute: compute, Total: compute}
 }
+
+type SystemUsage struct {
+	Usage
+	CoordinatorUsage
+}
+
+func (u SystemUsage) Cost(r Rates) UsageCost {
+	cost := u.Usage.Cost(r)
+	cost.Compute = u.CoordinatorUsage.Cost(r).Compute
+	cost.Total += cost.Compute
+	return cost
+}

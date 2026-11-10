@@ -85,4 +85,8 @@ func main() {
 	elapsed = end.Sub(start)
 	log.Println("Planned query:", elapsed)
 	log.Println(len(tuples))
+	usage, err := server.GetUsage()
+	cost := usage.Cost(kv.DefaultRates())
+	log.Println(cost)
+	log.Printf("%.6f", cost.Total)
 }
