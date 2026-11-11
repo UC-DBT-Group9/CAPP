@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestLogToPhys(t *testing.T) {
+func TestPlannerLowersLimit(t *testing.T) {
 	want := &Limit{
 		NumRows: 5,
 		Input:   &LocalScan{Source: "users"}}
@@ -13,17 +13,17 @@ func TestLogToPhys(t *testing.T) {
 		NumRows: 5,
 		Input:   TableScanNode{Source: "users"}}
 
-	got, err := LogToPhys(logicalNode, nil)
+	got, err := NewPlanner(nil, NeverPushdown).Plan(logicalNode)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("LogToPhys() = %v, want %v", got, want)
+		t.Fatalf("Plan() = %v, want %v", got, want)
 	}
 }
 
-func TestLogToPhys1(t *testing.T) {
+func TestPlannerLowersProjectionWithLimit(t *testing.T) {
 	want := &Limit{
 		NumRows: 5,
 		Input: &Project{
@@ -37,12 +37,12 @@ func TestLogToPhys1(t *testing.T) {
 			Attributes: []string{"id"},
 			Input:      TableScanNode{Source: "users"}}}
 
-	got, err := LogToPhys(logicalNode, nil)
+	got, err := NewPlanner(nil, NeverPushdown).Plan(logicalNode)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("LogToPhys() = %v, want %v", got, want)
+		t.Fatalf("Plan() = %v, want %v", got, want)
 	}
 }
