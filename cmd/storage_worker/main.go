@@ -1,32 +1,40 @@
 package main
 
 import (
-	"bytes"
+	"flag"
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
-	"os"
+	"time"
 
 	kv "github.com/UC-DBT-Group9/CAPP/internal"
 )
 
 func main() {
-	port := bytes.NewBufferString(":")
-	args := os.Args[1:]
-	if len(args) == 0 {
-		port.WriteString("6789")
-	} else if len(args) >= 2 && args[0] == "--port" {
-		port.WriteString(args[1])
+	port := flag.String("port", "6789", "port to listen on")
+	netMBps := flag.Float64("net-mb-per-sec", 0, "throttle: network bandwidth back to the coordinator in MB/s (0 = unlimited)")
+	scanMBps := flag.Float64("scan-mb-per-sec", 0, "throttle: storage scan speed for Select in MB/s (0 = unlimited)")
+	slots := flag.Int("select-slots", 0, "throttle: max Selects running at once (0 = unlimited)")
+	latencyMs := flag.Int("latency-ms", 0, "throttle: fixed delay per request in milliseconds")
+	flag.Parse()
+
+	const mb = 1 << 20
+	throttle := kv.Throttle{
+		BandwidthBytesPerSec: *netMBps * mb,
+		ScanBytesPerSec:      *scanMBps * mb,
+		SelectSlots:          *slots,
+		RequestLatency:       time.Duration(*latencyMs) * time.Millisecond,
 	}
 
 	kvserver := kv.NewKVStore()
+	kvserver.SetThrottle(throttle)
 	rpc.Register(kvserver)
 	rpc.HandleHTTP()
-	l, err := net.Listen("tcp", port.String())
+	l, err := net.Listen("tcp", ":"+*port)
 	if err != nil {
 		log.Fatal("listen error:", err)
 	}
-	log.Println("Listening on port", port.String())
+	log.Printf("Listening on port :%s (throttle: %+v)", *port, throttle)
 	http.Serve(l, nil)
 }
