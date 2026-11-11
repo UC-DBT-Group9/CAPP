@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"sync"
+	"time"
 )
 
 type SelectArgs struct {
@@ -36,6 +37,10 @@ type KVStore struct {
 	stats   map[string]*TableStats
 	mu      sync.Mutex
 	usage   *UsageTracker
+
+	throttle Throttle            // optional slowdown, see throttle.go
+	slots    chan struct{}       // limits concurrent Selects when throttled
+	sleep    func(time.Duration) // test hook; nil means time.Sleep
 }
 
 func NewKVStore() *KVStore {
@@ -71,14 +76,17 @@ func (store *KVStore) Get(args *GetArgs, reply *GetReply) error {
 	log.Println("Received get request:", args)
 
 	store.mu.Lock()
-	defer store.mu.Unlock()
-
 	obj, found := store.storage[args.Key]
+	store.mu.Unlock()
 	if !found {
 		return fmt.Errorf("key %s not found", args.Key)
 	}
 	store.usage.recordGetBytesReturned(int64(len(obj.Data)))
 	store.usage.AddOutboundBytes(int64(len(obj.Data)))
+
+	// Throttling: the whole raw object crosses the network.
+	store.pause(store.throttle.RequestLatency + store.throttle.transferDelay(int64(len(obj.Data))))
+
 	reply.CSVObj = obj
 	return nil
 }
@@ -102,6 +110,13 @@ func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
 		return err
 	}
 	store.usage.recordSelectBytesScanned(int64(len(csvObj.Data)))
+
+	// Throttling: wait for a free storage CPU slot, then pay for scanning the
+	// whole object at storage.
+	release := store.acquireSlot()
+	defer release()
+	store.pause(store.throttle.RequestLatency + store.throttle.scanDelay(int64(len(csvObj.Data))))
+
 	result := SelectReply{Schema: schema}
 
 	iter := csvObj.Iterator()
@@ -130,6 +145,9 @@ func (store *KVStore) Select(args *SelectArgs, reply *SelectReply) error {
 	}
 	store.usage.recordSelectBytesReturned(returned)
 	store.usage.AddOutboundBytes(returned)
+
+	// Throttling: only the matching, projected rows cross the network.
+	store.pause(store.throttle.transferDelay(returned))
 	*reply = result
 	return nil
 }

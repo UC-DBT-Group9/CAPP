@@ -24,6 +24,9 @@ type CostModel struct {
 }
 
 func (m *CostModel) Estimate(plan PhysicalPlanNode) (CostEstimate, error) {
+	if m.ComputeBytesPerSecond == 0 {
+		m.ComputeBytesPerSecond = DefaultComputeBytesPerSecond
+	}
 	s, err := m.estimate(plan)
 	if err != nil {
 		return CostEstimate{}, err
