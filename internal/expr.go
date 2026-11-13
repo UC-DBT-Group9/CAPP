@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"bytes"
 	"cmp"
 	"fmt"
 	"strings"
@@ -17,7 +16,6 @@ const (
 	OpOr
 	OpLiteral
 	OpField
-	OpRoot
 	OpAttrNum
 )
 
@@ -37,7 +35,6 @@ type NamedExpr struct {
 func Literal(v Value) Expr { return Expr{Op: OpLiteral, Value: v} }
 
 func Field(name string) Expr              { return Expr{Op: OpField, Name: name} }
-func Root() Expr                          { return Expr{Op: OpRoot} }
 func Binary(op Op, left, right Expr) Expr { return Expr{Op: op, Left: &left, Right: &right} }
 func AttrNum(index uint) Expr             { return Expr{Op: OpAttrNum, Index: index} }
 
@@ -72,8 +69,6 @@ func (e Expr) Eval(tuple Tuple) (Value, error) {
 	switch e.Op {
 	case OpLiteral:
 		return e.Value, nil
-	case OpRoot:
-		return ArrayValue(tuple.Values), nil
 	case OpField:
 		return Value{}, fmt.Errorf("unresolved field %q: resolve expression against a schema before evaluation", e.Name)
 	case OpEq, OpGT, OpLT, OpAnd, OpOr:
@@ -123,11 +118,11 @@ func (e Expr) Eval(tuple Tuple) (Value, error) {
 		return BoolValue(false), nil
 	}
 
-	cmp, err := CompareValues(left, right)
+	comp, err := CompareValues(left, right)
 	if err != nil {
 		return Value{}, err
 	}
-	return BoolValue((e.Op == OpGT && cmp > 0) || (e.Op == OpLT && cmp < 0)), nil
+	return BoolValue((e.Op == OpGT && comp > 0) || (e.Op == OpLT && comp < 0)), nil
 }
 
 func isNumeric(v Value) bool { return v.DataType == DataTypeInt || v.DataType == DataTypeFloat }
@@ -149,9 +144,6 @@ func CompareValues(a, b Value) (int, error) {
 	if a.DataType == DataTypeString && b.DataType == DataTypeString {
 		return strings.Compare(a.String, b.String), nil
 	}
-	if a.DataType == DataTypeBytes && b.DataType == DataTypeBytes {
-		return bytes.Compare(a.Bytes, b.Bytes), nil
-	}
 	return 0, fmt.Errorf("cannot order %s and %s", a.DataType, b.DataType)
 }
 
@@ -172,29 +164,7 @@ func areEqual(a, b Value) bool {
 		return a.Bool == b.Bool
 	case DataTypeString:
 		return a.String == b.String
-	case DataTypeBytes:
-		return bytes.Equal(a.Bytes, b.Bytes)
-	case DataTypeArray:
-		if len(a.Array) != len(b.Array) {
-			return false
-		}
-		for i := range a.Array {
-			if !areEqual(a.Array[i], b.Array[i]) {
-				return false
-			}
-		}
-		return true
-	case DataTypeObject:
-		if len(a.Object) != len(b.Object) {
-			return false
-		}
-		for name, item := range a.Object {
-			other, exists := b.Object[name]
-			if !exists || !areEqual(item, other) {
-				return false
-			}
-		}
-		return true
+	default:
 	}
 	return false
 }

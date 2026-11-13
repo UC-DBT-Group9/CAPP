@@ -57,8 +57,6 @@ func estimateValueBytes(v *Value) int64 {
 		return valueOverhead + 8
 	case DataTypeString:
 		return valueOverhead + int64(len(v.String))
-	case DataTypeBytes:
-		return valueOverhead + int64(len(v.Bytes))
 	default:
 		return valueOverhead
 	}

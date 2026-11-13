@@ -63,7 +63,7 @@ func main() {
 	}
 
 	start = time.Now()
-	planner := kv.NewPlanner(server)
+	planner := kv.NewPlanner(server, kv.CAPP)
 	plan, err := planner.Plan(kv.LimitNode{
 		NumRows: 2,
 		Input: kv.ProjectNode{
