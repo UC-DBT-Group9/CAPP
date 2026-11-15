@@ -2,6 +2,8 @@ package kv
 
 import (
 	"io"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -31,10 +33,10 @@ type Measurement struct {
 	Elapsed       time.Duration // wall-clock time for the operation
 }
 
-// EstimateTupleBytes returns an approximate serialized size for a tuple,
-// counting a fixed overhead per value plus the length of variable-width data.
-// It is deliberately simple: the goal is a consistent proxy for "how much data
-// crosses the network", not an exact wire size.
+// EstimateTupleBytes returns the size of a tuple as CSV text. Pulling raw data
+// ships the stored CSV object, and S3 Select bills by the CSV bytes it returns,
+// so pushdown is measured in the same units. This keeps the planner comparing
+// like with like when it weighs pushdown against pull.
 func EstimateTupleBytes(t *Tuple) int64 {
 	var n int64
 	for i := range t.Values {
@@ -43,23 +45,31 @@ func EstimateTupleBytes(t *Tuple) int64 {
 	return n
 }
 
-const valueOverhead = 2 // bytes of per-value framing in our rough model
-
+// estimateValueBytes is a value's length as a CSV field plus one separator
+// (the comma or newline after it). Nulls count as empty fields.
 func estimateValueBytes(v *Value) int64 {
+	const sep = 1
 	switch v.DataType {
-	case DataTypeNull:
-		return valueOverhead
 	case DataTypeBool:
-		return valueOverhead + 1
+		return int64(len(strconv.FormatBool(v.Bool))) + sep
 	case DataTypeInt:
-		return valueOverhead + 8
+		return int64(len(strconv.FormatInt(v.Int, 10))) + sep
 	case DataTypeFloat:
-		return valueOverhead + 8
+		return int64(len(strconv.FormatFloat(v.Float, 'g', -1, 64))) + sep
 	case DataTypeString:
-		return valueOverhead + int64(len(v.String))
-	default:
-		return valueOverhead
+		return csvFieldLen(v.String) + sep
+	default: // DataTypeNull and anything unexpected
+		return sep
 	}
+}
+
+// csvFieldLen is the length of s once written as a CSV field: fields holding a
+// comma, quote, or line break are wrapped in quotes, with inner quotes doubled.
+func csvFieldLen(s string) int64 {
+	if !strings.ContainsAny(s, ",\"\r\n") {
+		return int64(len(s))
+	}
+	return int64(len(s) + strings.Count(s, `"`) + 2)
 }
 
 // MeasureSelect runs a Select over obj the given way and returns both the
