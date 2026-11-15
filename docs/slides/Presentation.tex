@@ -128,10 +128,51 @@ Two papers from the same lab at the University of Wisconsin \pause
 
 \begin{frame}{Query Planner}{What is it?}
     \begin{itemize}
-        \item SQL is declarative; say what you want, not how to do it
-        \item Planner's job: decide how to perform the given query
-        \item
+        \item SQL is declarative; say what you want, not how to do it \pause
+        \item Planner's job: decide how to perform the given query \pause
+        \item Utilizes statistics about the database system and tables to estimate cost \pause
+        \item Pick the plan with the lowest estimated cost for execution
     \end{itemize}
+\end{frame}
+
+\subsection{The Database}
+\begin{frame}{Adding a Planner onto PushdownDB}
+    \begin{itemize}
+        \item PushdownDB used real cloud products (EC2, S3 Select) \pause
+        \item S3 Select is not available for new users \pause
+        \item This would cost real money \pause
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Building Our Own (Simulator)}{Requirements}
+    \begin{itemize}
+        \item Disaggregated database server and storage \pause
+        \item Store CSVs \pause
+        \item Get/Put/Select APIs \pause
+        \item Evaluate predicates on arbitrary CSV data \pause
+        \item Send predicates to the storage
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Primitive Datatypes}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.5]{Values}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Tuples and Schemas}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.5]{Schemas}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Expressions/Predicates}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.5]{Expressions}
+    \end{figure}
 \end{frame}
 
 \section{Results}
