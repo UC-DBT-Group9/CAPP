@@ -161,3 +161,21 @@ func (server *KVServer) GetUsage() (SystemUsage, error) {
 	total.CoordinatorUsage = server.Usage()
 	return total, nil
 }
+
+func (server *KVServer) GetStats(key string) (*TableStats, error) {
+	for i := range server.StorageWorkers {
+		worker := &server.StorageWorkers[i]
+		if worker.RPCClient == nil || key < worker.MinKey || key > worker.MaxKey {
+			continue
+		}
+		var stats TableStats
+		if err := worker.RPCClient.Call("KVStore.GetStats", &GetArgs{Key: key}, &stats); err != nil {
+			return nil, err
+		}
+		for _, attr := range stats.Schema.Attributes {
+			stats.order = append(stats.order, attr.Name)
+		}
+		return &stats, nil
+	}
+	return nil, fmt.Errorf("statistics for key %s not found", key)
+}

@@ -28,8 +28,10 @@ type LocalScan struct {
 }
 
 type RemoteScan struct {
-	Source string
-	coord  *KVServer
+	Predicate  *Expr
+	Attributes []string
+	Source     string
+	coord      *KVServer
 }
 
 func (*Limit) physicalOp() {}
@@ -110,11 +112,11 @@ func (*RemoteScan) physicalOp() {}
 func NewRemoteScan(source string, coord *KVServer) *RemoteScan {
 	return &RemoteScan{Source: source, coord: coord}
 }
-func (ls *RemoteScan) Execute() (*Schema, []Tuple, error) {
-	if ls.coord == nil {
+func (rs *RemoteScan) Execute() (*Schema, []Tuple, error) {
+	if rs.coord == nil {
 		return nil, nil, fmt.Errorf("remote scan requires a coordinator")
 	}
-	reply, err := ls.coord.Select(ls.Source, nil, nil)
+	reply, err := rs.coord.Select(rs.Source, rs.Predicate, rs.Attributes)
 	if err != nil {
 		return nil, nil, err
 	}

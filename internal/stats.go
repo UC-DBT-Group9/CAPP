@@ -10,14 +10,15 @@ import (
 // model uses to estimate how many rows a predicate will keep before we decide
 // whether to push it down to a storage worker or pull the raw data instead.
 type ColumnStats struct {
-	Name     string     // Column name, matching the schema attribute.
-	DataType DataType   // Column type, copied from the schema.
-	Count    int64      // Number of non-null values seen.
-	NullN    int64      // Number of null values seen.
-	Min      Value      // Smallest non-null value (zone-map low). Null if Count == 0.
-	Max      Value      // Largest non-null value (zone-map high). Null if Count == 0.
-	Distinct int64      // Estimated number of distinct non-null values.
-	Hist     *Histogram // Equi-width histogram for numeric columns; nil otherwise.
+	TupleBytes int64
+	Name       string     // Column name, matching the schema attribute.
+	DataType   DataType   // Column type, copied from the schema.
+	Count      int64      // Number of non-null values seen.
+	NullN      int64      // Number of null values seen.
+	Min        Value      // Smallest non-null value (zone-map low). Null if Count == 0.
+	Max        Value      // Largest non-null value (zone-map high). Null if Count == 0.
+	Distinct   int64      // Estimated number of distinct non-null values.
+	Hist       *Histogram // Equi-width histogram for numeric columns; nil otherwise.
 
 	// seen backs the distinct estimate. We track exact distinct values up to
 	// distinctCap; past that we stop growing the set and treat Distinct as a
@@ -29,9 +30,11 @@ type ColumnStats struct {
 // TableStats holds per-column statistics plus the table row count. This is the
 // object the planner consults; one is built per stored CSV object.
 type TableStats struct {
-	Rows    int64
-	Columns map[string]*ColumnStats
-	order   []string // column order, for stable reporting
+	Schema      Schema
+	ObjectBytes int64
+	Rows        int64
+	Columns     map[string]*ColumnStats
+	order       []string // column order, for stable reporting
 }
 
 const (
@@ -58,7 +61,7 @@ func CollectStats(obj *CSVObj) (*TableStats, error) {
 		return nil, fmt.Errorf("CollectStats: object schema has no columns")
 	}
 
-	ts := &TableStats{Columns: make(map[string]*ColumnStats)}
+	ts := &TableStats{Schema: obj.Schema, ObjectBytes: int64(len(obj.Data)), Columns: make(map[string]*ColumnStats)}
 	for _, attr := range obj.Schema.Attributes {
 		cs := &ColumnStats{
 			Name:     attr.Name,
@@ -118,6 +121,7 @@ func scan(obj *CSVObj, fn func(colIdx int, v Value)) error {
 
 // observe folds a single value into the column's running scalar statistics.
 func (cs *ColumnStats) observe(v Value) {
+	cs.TupleBytes += estimateValueBytes(&v)
 	if v.DataType == DataTypeNull {
 		cs.NullN++
 		return

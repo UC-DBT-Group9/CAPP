@@ -10,7 +10,7 @@ const (
 	defaultHoursPerMonth = 30 * 24
 
 	defaultStorageGBMonthRate = 0.022
-	defaultOutboundGBRate     = 0.09
+	defaultOutboundGBRate     = 0
 	defaultComputeHourRate    = 2.128
 	defaultSelectScanGBRate   = 0.002
 	defaultSelectReturnGBRate = 0.0007
