@@ -1,0 +1,280 @@
+\documentclass{beamer}
+
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+
+
+\title{CAPP: Cost-Aware Pushdown Planner}
+\author{Mason Hall, Abhinav Sapkota, Shiv Raj Mukherjee}
+\institute{University of Cincinnati}
+\date{\today}
+
+\definecolor{UCRed}{HTML}{E00122}
+\definecolor{UCDarkRed}{HTML}{B8011C}
+\definecolor{UCBlack}{HTML}{000000}
+\definecolor{UCGray}{HTML}{F3F3F3}
+\definecolor{UCWhite}{HTML}{FFFFFF}
+
+\usetheme{Antibes}
+\usecolortheme{default}
+
+\setbeamercolor{normal text}{
+    fg=UCBlack,
+    bg=UCWhite
+}
+\setbeamercolor{structure}{fg=UCRed}
+
+\setbeamercolor{frametitle}{
+    fg=UCWhite,
+    bg=UCRed
+}
+
+\setbeamercolor{title}{
+    fg=UCWhite,
+    bg=UCRed
+}
+\setbeamercolor{subtitle}{
+    fg=UCBlack
+}
+
+\setbeamercolor{block title}{
+    fg=UCWhite,
+    bg=UCRed
+}
+\setbeamercolor{block body}{
+    fg=UCBlack,
+    bg=UCGray
+}
+
+\setbeamertemplate{itemize item}{
+    \color{UCRed}\small$\blacksquare$
+}
+
+\graphicspath{{./images/}}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\begin{frame}
+    \textbf{Topic:}
+    \begin{itemize}
+        \item Distributed Database Systems \pause
+        \item Distributed Query Strategies
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Papers}
+Two papers from the same lab at the University of Wisconsin \pause
+\newline
+    \begin{itemize}
+        \item \textbf{Disaggregation} \pause
+        \item \textbf{PushdownDB}
+    \end{itemize}
+\end{frame}
+
+\subsection{Papers}
+\begin{frame}{Disaggregation}
+    \begin{itemize}
+        \item Describes the current state of distributed database architectures \pause
+            \begin{itemize}
+                \item Utilize popular clouds (AWS, GCP, etc.) \pause
+                \item Split up components into specialized products (EC2
+                for compute, S3 for storage) \pause
+            \end{itemize}
+        \item States that distributed query planning is an open problem
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{PushdownDB}
+    \begin{itemize}
+        \item Explores the AWS product \textit{S3 Select} \pause
+        \begin{itemize}
+            \item Storage product like S3 \pause
+            \item Supports SQL filtering of data to be returned \pause
+        \end{itemize}
+        \item States that pushing filters into S3 is "always cost-effective" \pause
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{PushdownDB cont.}
+\textbf{Results/Costs}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.4]{PushdownDBResults}
+    \end{figure}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.4]{PushdownDBCosts}
+    \end{figure}
+\end{frame}
+
+\section{Solution}
+\begin{frame}{Our Question}
+    There are certainly some queries where paying to do the scan on S3 costs more. \pause
+    \newline
+    \newline
+    \textbf{Example:} A predicate that would return 99\% of the data. \pause
+    \begin{enumerate}
+        \item Scan all the data to filter out results \pause
+        \item Return basically all of it anyway \pause
+        \item Pay select scan cost for no reason \pause
+    \end{enumerate}
+    \textbf{Q: When is the best time to push down vs. pull?}
+\end{frame}
+
+\begin{frame}{Query Planner}{What is it?}
+    \begin{itemize}
+        \item SQL is declarative; say what you want, not how to do it \pause
+        \item Planner's job: decide how to perform the given query \pause
+        \item Utilizes statistics about the database system and tables to estimate cost \pause
+        \item Pick the plan with the lowest estimated cost for execution
+    \end{itemize}
+\end{frame}
+
+\subsection{The Database}
+\begin{frame}{}
+    \centering
+    \large\textbf{The Database}
+\end{frame}
+
+\begin{frame}{Adding a Planner onto PushdownDB}
+    \begin{itemize}
+        \item PushdownDB used real cloud products (EC2, S3 Select) \pause
+        \item S3 Select is not available for new users \pause
+        \item This would cost real money \pause
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Building Our Own (Simulator)}{Requirements}
+    \begin{itemize}
+        \item Disaggregated database server and storage \pause
+        \item Store CSVs \pause
+        \item Get/Put/Select APIs \pause
+        \item Evaluate predicates on arbitrary CSV data \pause
+        \item Send predicates to the storage
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Primitive Datatypes}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.5]{Values}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Tuples and Schemas}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.5]{Schemas}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Expressions/Predicates}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.5]{Expressions} \pause
+    \end{figure}
+
+    Go can send this all over the wire without any extra code!
+
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.5]{GoRPC}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Queries}
+    \textbf{Logical:}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.4]{LogicalQuery} \pause
+    \end{figure}
+    \textbf{Physical (what the planner makes):}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.4]{PhysicalPlan}
+    \end{figure}
+\end{frame}
+
+\subsection{The Planner}
+\begin{frame}{}
+    \centering
+    \large\textbf{The Planner}
+\end{frame}
+
+\begin{frame}{At a High Level}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.6]{PlannerLogic}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{The Steps}
+    \begin{enumerate}
+        \item Go through each node in the query tree \pause
+        \item Convert to the equivalent physical operator \pause
+        \item Using table and column statistics, estimate the bytes returned by each physical operator \pause
+        \item Complete for both the pushdown (RemoteScan) and pull (LocalScan) options \pause
+        \item Return the cheapest (in dollars)
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Estimation Example}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.45]{LimitEstimation} \pause
+    \end{figure}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.4]{Estimation}
+    \end{figure}
+\end{frame}
+
+\section{Statistics}
+\begin{frame}{}
+    \centering
+    \large\textbf{Statistics}
+\end{frame}
+\begin{frame}{Statistics}{Knowing the Data Before the Query}
+    \begin{figure}
+        \includegraphics[scale=0.28]{Abhi_Stats}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Selectivity}{How Many Rows Will a Filter Keep?}
+    \begin{figure}
+        \includegraphics[scale=0.28]{Abhi_Selectivity}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Push vs. Pull}{Same Answer, 19x Less Data}
+    \begin{figure}
+        \includegraphics[scale=0.28]{Abhi_Pushdown}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Throttling}{A Cloud on One Machine}
+    \begin{figure}
+        \includegraphics[scale=0.28]{Abhi_Throttling}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Closest Work}{FlexPushdownDB vs. CAPP}
+    \begin{figure}
+        \includegraphics[scale=0.28]{Abhi_CW}
+    \end{figure}
+\end{frame}
+
+\section{Results}
+\begin{frame}
+\end{frame}
+
+\section{Conclusion}
+\begin{frame}
+\end{frame}
+
+\end{document}
