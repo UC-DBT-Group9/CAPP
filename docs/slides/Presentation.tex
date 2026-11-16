@@ -136,6 +136,11 @@ Two papers from the same lab at the University of Wisconsin \pause
 \end{frame}
 
 \subsection{The Database}
+\begin{frame}{}
+    \centering
+    \large\textbf{The Database}
+\end{frame}
+
 \begin{frame}{Adding a Planner onto PushdownDB}
     \begin{itemize}
         \item PushdownDB used real cloud products (EC2, S3 Select) \pause
@@ -171,7 +176,61 @@ Two papers from the same lab at the University of Wisconsin \pause
 \begin{frame}{Expressions/Predicates}
     \begin{figure}
         \centering
-        \includegraphics[scale=0.5]{Expressions}
+        \includegraphics[scale=0.5]{Expressions} \pause
+    \end{figure}
+
+    Go can send this all over the wire without any extra code!
+
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.5]{GoRPC}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Queries}
+    \textbf{Logical:}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.4]{LogicalQuery} \pause
+    \end{figure}
+    \textbf{Physical (what the planner makes):}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.4]{PhysicalPlan}
+    \end{figure}
+\end{frame}
+
+\subsection{The Planner}
+\begin{frame}{}
+    \centering
+    \large\textbf{The Planner}
+\end{frame}
+
+\begin{frame}{At a High Level}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.6]{PlannerLogic}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{The Steps}
+    \begin{enumerate}
+        \item Go through each node in the query tree \pause
+        \item Convert to the equivalent physical operator \pause
+        \item Using table and column statistics, estimate the bytes returned by each physical operator \pause
+        \item Complete for both the pushdown (RemoteScan) and pull (LocalScan) options \pause
+        \item Return the cheapest (in dollars)
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Estimation Example}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.45]{LimitEstimation} \pause
+    \end{figure}
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.4]{Estimation} \pause
     \end{figure}
 \end{frame}
 
