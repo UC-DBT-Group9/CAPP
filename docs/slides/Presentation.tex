@@ -68,11 +68,11 @@
 \end{frame}
 
 \begin{frame}{Papers}
-Two papers from the same lab at the University of Wisconsin \pause
+A few papers from the same lab at the University of Wisconsin \pause
 \newline
     \begin{itemize}
-        \item \textbf{Disaggregation} \pause
-        \item \textbf{PushdownDB}
+        \item \textbf{Disaggregation} \cite{yu2025disaggregation} \pause
+        \item \textbf{PushdownDB} \cite{yu2020pushdowndb} \cite{yang2021flexpushdowndb}
     \end{itemize}
 \end{frame}
 
@@ -188,7 +188,7 @@ Two papers from the same lab at the University of Wisconsin \pause
 \end{frame}
 
 \begin{frame}{Queries}
-    \textbf{Logical:}
+    \textbf{Logical (modeled after relational algebra):}
     \begin{figure}
         \centering
         \includegraphics[scale=0.4]{LogicalQuery} \pause
@@ -270,11 +270,32 @@ Two papers from the same lab at the University of Wisconsin \pause
 \end{frame}
 
 \section{Results}
-\begin{frame}
+\begin{frame}{}
+    \centering
+    \large\textbf{Results}
 \end{frame}
 
-\section{Conclusion}
-\begin{frame}
+\begin{frame}{Query 1}{Select by less tahn specific order id}
+    \begin{figure}
+        \includegraphics[scale=0.25]{Shiv_Q1}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Query 2}{Specific line status and return flag}
+    \begin{figure}
+        \includegraphics[scale=0.25]{Shiv_Q2}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Average Cost Across Plans}
+    \begin{figure}
+        \includegraphics[scale=0.2]{Shiv_Avg}
+    \end{figure}
+\end{frame}
+
+\begin{frame}[allowframebreaks]{References}
+    \bibliographystyle{plain}
+    \bibliography{references}
 \end{frame}
 
 \end{document}
